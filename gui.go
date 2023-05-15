@@ -1,13 +1,20 @@
 package gui
 
 import (
+	"log"
+	"os"
+	"syscall"
+	"unsafe"
+
 	tl "github.com/JoelOtter/termloop"
 	"github.com/google/uuid"
+	"github.com/nsf/termbox-go"
 )
 
 type GUI struct {
 	game      *tl.Game
 	drawables map[uuid.UUID][]tl.Drawable
+	endKey    *tl.Key
 }
 
 // NewGUI returns a new GUI instance.
@@ -30,10 +37,32 @@ func NewGUI(debug bool) *GUI {
 // If endKey is not nil, the GUI will exit when the key is pressed.
 // Default if Ctrl+C.
 func (g *GUI) Start(endKey *tl.Key) {
-	if endKey != nil {
-		g.game.SetEndKey(*endKey)
+	if endKey == nil {
+		tmp := tl.KeyCtrlC
+		g.endKey = &tmp
+	} else {
+		g.endKey = endKey
 	}
+	g.game.SetEndKey(*g.endKey)
 	g.game.Start()
+}
+
+// Stop stops the GUI and returns control to the Start caller.
+// If the GUI is not running, this function does nothing.
+func (g *GUI) Stop() {
+	if g.endKey == nil {
+		return
+	}
+	_, _, errno := syscall.Syscall(
+		syscall.SYS_IOCTL,
+		os.Stdin.Fd(),
+		syscall.TIOCSTI,
+		uintptr(unsafe.Pointer(g.endKey)))
+	if errno != 0 {
+		termbox.Close()
+		log.Fatalln(errno.Error())
+	}
+	g.endKey = nil
 }
 
 // Draw draws the given Drawable on the screen.
